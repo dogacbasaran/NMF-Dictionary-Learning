@@ -2,8 +2,10 @@
 """
 Created on Fri Dec 23 21:01:38 2016
 Sparse Non-negative Matrix Factorization
-Kullbeck-Leibler Divergence (KL)
-d(v_fn || v_hat_fn) = v_fn log(v_fn/v_hat_fn) - v_fn + v_hat_fn
+Three divergences d(v_fn || v_hat_fn)
+    0 - Itakura-Saito
+    1 - Kullbeck-Leibler
+    2 - Euclidean
 
 min_(W,H) d(v_fn || v_hat_fn) + lambda sum_n ||h_n||_1
 
@@ -67,9 +69,15 @@ y_train = y_digits[:n_train_samples]
 X_test = X_digits[:,n_train_samples:]
 y_test = y_digits[n_train_samples:]
 
+
+# divergence = 0 -> Itakura-Saito Divergence
+# divergence = 1 -> Kullbeck-Leibler Divergence
+# divergence = 2 -> Eucledian Divergence
+divergence = 2
+
 # Number of basis vectors
 K = 20
-beta = 0.2
+beta = 0.05
 
 for number in range(10):
     print('Training for number %d' % number)
@@ -88,31 +96,79 @@ for number in range(10):
     W_old = W;
     H_old = H;
     tolerance = 1e-4
+    
+    one_matrix = np.ones((n_features, n_samples))
+    
     for iter in range(2000):
     
-        #####
-        ## KL divergence multiplicative updates
-        #####
-        # Update W matrix
-        W_new = W_old * ((V/W_old.dot(H)).dot(H.T)) / (np.ones((n_features, n_samples)).dot(H.T))
-        
-        # Update H matrix
-        H_new = H_old * ((W_new.T).dot((V/W_new.dot(H_old)))) / (beta + (W_new.T).dot(np.ones((n_features, n_samples))))
-    
+        if divergence == 0: # Itakura-Saito
+            #####
+            ## IS divergence multiplicative updates
+            #####
+            V_hat = W_old.dot(H_old)
+            # Update W matrix
+            W_new = W_old * ((V/V_hat**2).dot(H_old.T)) / ((1/V).dot(H_old.T))
+            
+            V_hat = W_new.dot(H_old)        
+            # Update H matrix
+            H_new = H_old * ((W_new.T).dot((V/V_hat**2))) / (beta + (W_new.T).dot((1/V)))
+        elif divergence==1: # Kullbeck-Liebler
+            #####
+            ## KL divergence multiplicative updates
+            #####
+            
+            V_hat = W_old.dot(H_old)
+            # Update W matrix
+            W_new = W_old * ((V/V_hat).dot(H_old.T)) / (one_matrix.dot(H_old.T))
+            
+            V_hat = W_new.dot(H_old)        
+            # Update H matrix
+            H_new = H_old * ((W_new.T).dot((V/V_hat))) / (beta + (W_new.T).dot(one_matrix))
+        elif divergence == 2: # Euclidean
+            #####
+            ## EUC divergence multiplicative updates
+            #####
+            
+            V_hat = W_old.dot(H_old)
+            # Update W matrix
+            W_new = W_old * (V.dot(H_old.T)) / (V_hat.dot(H_old.T))
+            
+            V_hat = W_new.dot(H_old)        
+            # Update H matrix
+            H_new = H_old * ((W_new.T).dot((V))) / (beta + (W_new.T).dot(V_hat))
+            
         if np.max(np.max(np.abs(W_new-W_old),axis=0)) < tolerance:
             print('tolerance reached at iteration %d' % iter)
             break
         else:
             W_old = W_new
             H_old = H_new
-       
-    if number==0:        
-        W_dict = W_new
-    else:
-        W_dict = np.concatenate((W_dict,W_new),axis=1)
-        
-    print('The size of dictionary is %d\n' % W_dict.shape[1])
+      
+    if divergence==0:        
+        if number==0:        
+            W_dict_IS = W_new
+        else:
+            W_dict_IS = np.concatenate((W_dict_IS,W_new),axis=1)
+    elif divergence==1:
+        if number==0:        
+            W_dict_KL = W_new
+        else:
+            W_dict_KL = np.concatenate((W_dict_KL,W_new),axis=1)
+    elif divergence==2:
+        if number==0:        
+            W_dict_Euc = W_new
+        else:
+            W_dict_Euc = np.concatenate((W_dict_Euc,W_new),axis=1)
+    
+    print(' ')        
 # plot_gallery('NMF Bases KL divergence', W.T)
+
+if divergence==0:        
+    W_dict = W_dict_IS
+elif divergence==1:
+    W_dict = W_dict_KL
+elif divergence==2:
+    W_dict = W_dict_Euc
 
 H_train = (X_train.T).dot(W_dict)
 
