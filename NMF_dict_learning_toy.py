@@ -1,10 +1,25 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Dec 23 21:01:38 2016
-Non-negative Matrix Factorization
+Sparse Non-negative Matrix Factorization
+Kullbeck-Leibler Divergence (KL)
+d(v_fn || v_hat_fn) = v_fn log(v_fn/v_hat_fn) - v_fn + v_hat_fn
 
-Dictionary Learning example with digits dataset from sklearn
+min_(W,H) d(v_fn || v_hat_fn) + lambda sum_n ||h_n||_1
 
+Dictionary Learning example with DIGITS dataset from sklearn
+Training Procedure:
+    - Learn basis W_i for each number i=0,1,2,...,9
+    - Concatenate each W_i to form W_dict = [W_0 W_1 ... W_9]
+    - Project each training data onto W_dict to obtain features
+    - Train a multinomial logistic regression classifier with these training data
+Test Procedure:
+    - Project each test data onto W_dict to obtain features
+    - Use Logistic Regression Classifier to estimate the digit
+    - Compute the score for the test set
+
+    
+    
 @author: dbasaran
 """
 def plot_gallery(title, images, n_col=2, n_row=3):
@@ -41,7 +56,7 @@ X_digits = X_digits.T
 
 # Data is scaled to be in the range [0,1]
 #X_digits = X_digits/np.max(X_digits,axis=0)
-X_digits += 0.000001
+X_digits += 1e-12
 
 n_train_samples = np.int(np.floor(0.9 * X_digits.shape[1]))
 # Training set
@@ -54,6 +69,7 @@ y_test = y_digits[n_train_samples:]
 
 # Number of basis vectors
 K = 20
+beta = 0.2
 
 for number in range(10):
     print('Training for number %d' % number)
@@ -71,7 +87,7 @@ for number in range(10):
 
     W_old = W;
     H_old = H;
-    tolerance = 1e-6
+    tolerance = 1e-4
     for iter in range(2000):
     
         #####
@@ -81,10 +97,10 @@ for number in range(10):
         W_new = W_old * ((V/W_old.dot(H)).dot(H.T)) / (np.ones((n_features, n_samples)).dot(H.T))
         
         # Update H matrix
-        H_new = H_old * ((W_new.T).dot((V/W_new.dot(H_old)))) / ((W_new.T).dot(np.ones((n_features, n_samples))))
+        H_new = H_old * ((W_new.T).dot((V/W_new.dot(H_old)))) / (beta + (W_new.T).dot(np.ones((n_features, n_samples))))
     
         if np.max(np.max(np.abs(W_new-W_old),axis=0)) < tolerance:
-            print('tolerance reached')
+            print('tolerance reached at iteration %d' % iter)
             break
         else:
             W_old = W_new
