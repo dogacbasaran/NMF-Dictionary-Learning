@@ -24,6 +24,7 @@ Test Procedure:
     
 @author: dbasaran
 """
+
 def plot_gallery(title, images, n_col=2, n_row=3):
     plt.figure(figsize=(2. * n_col, 2.26 * n_row))
     plt.suptitle(title, size=16)
@@ -77,7 +78,12 @@ divergence = 2
 
 # Number of basis vectors
 K = 20
-beta = 0.05
+
+# The coefficients for L1 and L2 norm constraints on W and H
+lambda_1 = 0.1
+lambda_2 = 0.
+lambda_3 = 0.05
+lambda_4 = 0.05
 
 for number in range(10):
     print('Training for number %d' % number)
@@ -98,8 +104,8 @@ for number in range(10):
     tolerance = 1e-4
     
     one_matrix = np.ones((n_features, n_samples))
-    
-    for iter in range(2000):
+    number_of_iterations = 3000
+    for iter in range(number_of_iterations):
     
         if divergence == 0: # Itakura-Saito
             #####
@@ -107,11 +113,11 @@ for number in range(10):
             #####
             V_hat = W_old.dot(H_old)
             # Update W matrix
-            W_new = W_old * ((V/V_hat**2).dot(H_old.T)) / ((1/V).dot(H_old.T))
+            W_new = W_old * ((V/V_hat**2).dot(H_old.T)) / ((1/V).dot(H_old.T) + lambda_1 + lambda_3 * W_old)
             
             V_hat = W_new.dot(H_old)        
             # Update H matrix
-            H_new = H_old * ((W_new.T).dot((V/V_hat**2))) / (beta + (W_new.T).dot((1/V)))
+            H_new = H_old * ((W_new.T).dot((V/V_hat**2))) / ((W_new.T).dot((1/V)) + lambda_2 + lambda_4 * H_old)
         elif divergence==1: # Kullbeck-Liebler
             #####
             ## KL divergence multiplicative updates
@@ -119,11 +125,11 @@ for number in range(10):
             
             V_hat = W_old.dot(H_old)
             # Update W matrix
-            W_new = W_old * ((V/V_hat).dot(H_old.T)) / (one_matrix.dot(H_old.T))
+            W_new = W_old * ((V/V_hat).dot(H_old.T)) / (one_matrix.dot(H_old.T) + lambda_1 + lambda_3 * W_old)
             
             V_hat = W_new.dot(H_old)        
             # Update H matrix
-            H_new = H_old * ((W_new.T).dot((V/V_hat))) / (beta + (W_new.T).dot(one_matrix))
+            H_new = H_old * ((W_new.T).dot((V/V_hat))) / ((W_new.T).dot(one_matrix) + lambda_2 + lambda_4 * H_old)
         elif divergence == 2: # Euclidean
             #####
             ## EUC divergence multiplicative updates
@@ -131,19 +137,22 @@ for number in range(10):
             
             V_hat = W_old.dot(H_old)
             # Update W matrix
-            W_new = W_old * (V.dot(H_old.T)) / (V_hat.dot(H_old.T))
+            W_new = W_old * (V.dot(H_old.T)) / (V_hat.dot(H_old.T) + lambda_1 + lambda_3 * W_old)
             
             V_hat = W_new.dot(H_old)        
             # Update H matrix
-            H_new = H_old * ((W_new.T).dot((V))) / (beta + (W_new.T).dot(V_hat))
+            H_new = H_old * ((W_new.T).dot((V))) / ((W_new.T).dot(V_hat) + lambda_2 + lambda_4 * H_old)
             
         if np.max(np.max(np.abs(W_new-W_old),axis=0)) < tolerance:
             print('tolerance reached at iteration %d' % iter)
             break
         else:
+            if iter == number_of_iterations-1:
+                print('tolerance not reached, maximum difference is %f' % np.max(np.max(np.abs(W_new-W_old),axis=0)))
+      
             W_old = W_new
             H_old = H_new
-      
+            
     if divergence==0:        
         if number==0:        
             W_dict_IS = W_new
@@ -180,3 +189,17 @@ logistic.fit(H_train,y_train)
 H_test = (X_test.T).dot(W_dict)
 
 print('LogisticRegression score: %f' % logistic.score(H_test, y_test))
+
+y_estimates = logistic.predict(H_test)
+errors = np.zeros(10)
+for i in range(len(y_test)):
+    if y_estimates[i] != y_test[i]:
+        errors[y_test[i]] += 1
+
+width = 40/50.0
+plt.bar((np.arange(10))-width/2,errors,width=width)
+plt.xticks(range(10))
+plt.ylim([0, np.max(errors)+1])
+plt.xlabel('Digits')
+plt.ylabel('Number of errors')
+plt.title('The number of errors for each digit')
